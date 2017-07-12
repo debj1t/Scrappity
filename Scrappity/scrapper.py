@@ -1,5 +1,10 @@
 import argparse
+import os
+from twisted.internet import reactor
+from scrapy.crawler import CrawlerRunner
 
+# The parser
+from CnqzuParser import CnqzuParser
 
 # Parser handle to parse the arguments
 parser = argparse.ArgumentParser()
@@ -26,11 +31,26 @@ parser.add_argument("-l",
 
 parser.add_argument("-v",
                     "--verbose",
+                    default=False,
                     action="store_true",
                     help="increase output verbosity")
 
 # Parse all the arguments
 args = parser.parse_args()
 
-# Print limit value
-print (args.limit)
+# In case no path is provided, 'pwd' is used
+if args.path is None:
+    args.path = os.getcwd()
+
+# Get a runner for scrappy
+runner = CrawlerRunner()
+
+# Add the parser spider
+d = runner.crawl(CnqzuParser,
+                 **args.__dict__)
+
+# Add reactor stop so that after done it can close
+d.addBoth(lambda _: reactor.stop())
+
+# Run the reactor
+reactor.run()
