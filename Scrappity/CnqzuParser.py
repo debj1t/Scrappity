@@ -21,11 +21,18 @@ class CnqzuParser(scrapy.Spider):
         self.limit = kwargs.get("limit")
         self.verbose = kwargs.get("verbose")
         self.downloaded_count = 0
-        self.pending_jobs = []
+        self.pending_downloads = []
+        self.urls_to_be_processed = [self.url]
+        reactor.suggestThreadPoolSize(1)
 
     def start_requests(self):
         # Our journey begins from here
-        yield scrapy.Request(url=self.url, callback=self.parse)
+        if self.urls_to_be_processed:
+            url = self.urls_to_be_processed.pop(0)
+            print('URLS: ', url)
+            yield scrapy.Request(url=url, callback=self.parse)
+        else :
+            print('All URLs are processed')
 
     def parse(self,
               response):
@@ -53,26 +60,33 @@ class CnqzuParser(scrapy.Spider):
 
                 # If file exists or allowable amount of file download is in process,
                 # no need to go further
-                if os.path.exists(path) or self.downloaded_count >= self.limit:
-                    return
+                if os.path.exists(path):
+                    continue
 
                 # Create the directory for the file to store
                 directory = os.path.dirname(path)
-                os.makedirs(directory)
+                if not os.path.exists(directory):
+                    os.makedirs(directory)
 
                 # Keep track of downloaded files
                 self.downloaded_count += 1
 
                 # Append in pending job.
                 # Will be removed when file is downloaded
-                self.pending_jobs.append(link)
+                self.pending_downloads.append(link)
 
                 # Process this file to store
+                print("Downloading : ", link)
                 yield scrapy.Request(url=link, callback=self.save_file)
                 continue
 
             # Go one level deep in directory structure
-            yield scrapy.Request(url=link, callback=self.parse)
+            self.urls_to_be_processed.append(link)
+            #yield scrapy.Request(url=link, callback=self.parse)
+
+        if(self.urls_to_be_processed):
+            url = self.urls_to_be_processed.pop(0)
+            yield scrapy.Request(url=url, callback=self.parse)
 
     def get_path(self, url):
         # From URL generate path in file system where it will
@@ -86,15 +100,17 @@ class CnqzuParser(scrapy.Spider):
     def save_file(self, response):
         # Get the path to store the file
         path = self.get_path(response.url)
-        print ("Downloading :", path)
+
         # Consider this file download job done
-        self.pending_jobs.remove(response.url)
+        self.pending_downloads.remove(response.url)
 
         # Write the content of the file
         with open(path, "wb") as f:
             f.write(response.body)
 
+        print("Download Complete : ", path)
         # Check if all pending jobs are done
-        if not self.pending_jobs:
+        if not self.pending_downloads and \
+           self.limit <= self.downloaded_count:
             # Stop the spider
             reactor.stop()

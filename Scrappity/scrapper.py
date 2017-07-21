@@ -6,6 +6,10 @@ from scrapy.crawler import CrawlerRunner
 # The parser
 from CnqzuParser import CnqzuParser
 
+def CommonErrorFunction(err):
+    print("Unexpected error occured. Traceback :\n%s" %err.getBriefTraceback())
+    reactor.stop()
+
 # Parser handle to parse the arguments
 parser = argparse.ArgumentParser()
 
@@ -50,7 +54,7 @@ d = runner.crawl(CnqzuParser,
                  **args.__dict__)
 
 # Add reactor stop so that after done it can close
-d.addBoth(lambda _: reactor.stop())
+d.addCallbacks(lambda _: reactor.stop(), CommonErrorFunction)
 
 # Run the reactor
 reactor.run()
