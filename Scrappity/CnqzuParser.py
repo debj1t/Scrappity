@@ -1,6 +1,6 @@
 import scrapy
 from twisted.internet import reactor
-
+from logger import ScrappityLogger as log
 import os
 
 class CnqzuParser(scrapy.Spider):
@@ -15,11 +15,6 @@ class CnqzuParser(scrapy.Spider):
         # Call constructor of parent class
         super(CnqzuParser, self).__init__(*args, **kwargs)
 
-        self.url = kwargs.get("url")
-        self.path = kwargs.get("path")
-        self.genre = kwargs.get("genre")
-        self.limit = kwargs.get("limit")
-        self.verbose = kwargs.get("verbose")
         self.downloaded_count = 0
         self.pending_downloads = []
         self.urls_to_be_processed = [self.url]
@@ -29,10 +24,9 @@ class CnqzuParser(scrapy.Spider):
         # Our journey begins from here
         if self.urls_to_be_processed:
             url = self.urls_to_be_processed.pop(0)
-            print('URLS: ', url)
             yield scrapy.Request(url=url, callback=self.parse)
         else :
-            print('All URLs are processed')
+            log.debug('All URLs are processed')
 
     def parse(self,
               response):
@@ -76,13 +70,12 @@ class CnqzuParser(scrapy.Spider):
                 self.pending_downloads.append(link)
 
                 # Process this file to store
-                print("Downloading : ", link)
+                log.info("Downloading : {}".format(link))
                 yield scrapy.Request(url=link, callback=self.save_file)
                 continue
 
             # Go one level deep in directory structure
             self.urls_to_be_processed.append(link)
-            #yield scrapy.Request(url=link, callback=self.parse)
 
         if(self.urls_to_be_processed):
             url = self.urls_to_be_processed.pop(0)
@@ -108,7 +101,7 @@ class CnqzuParser(scrapy.Spider):
         with open(path, "wb") as f:
             f.write(response.body)
 
-        print("Download Complete : ", path)
+        log.info("Download Complete : {}".format(path))
         # Check if all pending jobs are done
         if not self.pending_downloads and \
            self.limit <= self.downloaded_count:
