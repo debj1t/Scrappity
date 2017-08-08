@@ -16,15 +16,17 @@ class CnqzuParser(scrapy.Spider):
         super(CnqzuParser, self).__init__(*args, **kwargs)
 
         self.downloaded_count = 0
+        self.toBeDownloaded   = []
         self.pending_downloads = []
         self.urls_to_be_processed = [self.url]
         reactor.suggestThreadPoolSize(1)
 
     def start_requests(self):
         # Our journey begins from here
+        log.info("Crawling '{}'. Fetching {} book(s)".format(self.url,self.limit))
         if self.urls_to_be_processed:
             url = self.urls_to_be_processed.pop(0)
-            yield scrapy.Request(url=url, callback=self.parse)
+            yield scrapy.Request(url=url, callback=self.parse, priority=self.downloaded_count+1)
         else :
             log.debug('All URLs are processed')
 
@@ -45,6 +47,8 @@ class CnqzuParser(scrapy.Spider):
 
             # In case of download limit reached no need to keep going
             if self.downloaded_count >= self.limit:
+                link = self.toBeDownloaded.pop(0)
+                yield scrapy.Request(url=link, callback=self.save_file )
                 return
 
             # If link does not ends with '/' then it is file
@@ -71,7 +75,7 @@ class CnqzuParser(scrapy.Spider):
 
                 # Process this file to store
                 log.info("Downloading : {}".format(link))
-                yield scrapy.Request(url=link, callback=self.save_file)
+                self.toBeDownloaded.append( link)
                 continue
 
             # Go one level deep in directory structure
@@ -102,6 +106,10 @@ class CnqzuParser(scrapy.Spider):
             f.write(response.body)
 
         log.info("Download Complete : {}".format(path))
+        if(self.toBeDownloaded):
+            link = self.toBeDownloaded.pop(0)
+            yield scrapy.Request(url=link, callback=self.save_file )
+
         # Check if all pending jobs are done
         if not self.pending_downloads and \
            self.limit <= self.downloaded_count:
